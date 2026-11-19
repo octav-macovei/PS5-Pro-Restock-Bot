@@ -1,0 +1,53 @@
+
+name: Check PS5 Pro Altex stock
+
+on:
+  workflow_dispatch:
+    inputs:
+      test_notification:
+        description: Send a test Telegram notification
+        required: false
+        type: boolean
+        default: false
+  schedule:
+    - cron: '*/10 * * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: ps5-restock-check
+  cancel-in-progress: false
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check stock or test Telegram
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          TEST_NOTIFICATION: ${{ inputs.test_notification }}
+        run: python ps5_monitor.py
+
+      - name: Save monitor state
+        if: ${{ !inputs.test_notification }}
+        run: |
+          if [ -f state.json ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add state.json
+            if ! git diff --cached --quiet; then
+              git commit -m "Update stock state"
+              git push
+            fi
+          fi
